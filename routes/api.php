@@ -9,7 +9,7 @@ use App\Http\Controllers\MasterDataController;
 use App\Http\Middleware\CheckRole;
 
 // Public Routes
-
+Route::post('/login', [AuthController::class, 'login']);
 
 // Protected Routes
 Route::middleware('auth:sanctum')->group(function () {

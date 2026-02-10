@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use App\Models\LaporanBulanan;
 use Illuminate\Support\Facades\DB;
 
+use App\Models\Madrasah;
+
 class AdminController extends Controller
 {
     // === KASI PENMAD ===
@@ -15,6 +17,7 @@ class AdminController extends Controller
     {
         // Summary Stats
         $stats = [
+            'total_madrasah' => Madrasah::count(),
             'total_submitted' => LaporanBulanan::where('status_laporan', 'submitted')->count(),
             'total_verified' => LaporanBulanan::where('status_laporan', 'verified')->count(),
             'total_revisi' => LaporanBulanan::where('status_laporan', 'revisi')->count(),
