@@ -13,14 +13,21 @@ class AdminController extends Controller
     // Monitoring Dashboard
     public function dashboard(Request $request) 
     {
-        // Summary Stats
+        // Summary Stats (Exclude deleted records)
         $stats = [
             'total_madrasah' => \App\Models\Madrasah::count(),
-            'laporan_masuk' => LaporanBulanan::whereIn('status_laporan', ['submitted', 'verified', 'revisi'])->count(),
-            'terverifikasi' => LaporanBulanan::where('status_laporan', 'verified')->count(),
-            'perlu_revisi' => LaporanBulanan::where('status_laporan', 'revisi')->count(),
+            'laporan_masuk' => LaporanBulanan::whereIn('status_laporan', ['submitted', 'verified', 'revisi'])
+                ->whereNull('deleted_at_admin')
+                ->count(),
+            'terverifikasi' => LaporanBulanan::where('status_laporan', 'verified')
+                ->whereNull('deleted_at_admin')
+                ->count(),
+            'perlu_revisi' => LaporanBulanan::where('status_laporan', 'revisi')
+                ->whereNull('deleted_at_admin')
+                ->count(),
             'recent_submissions' => LaporanBulanan::with('madrasah')
                 ->where('status_laporan', '!=', 'draft')
+                ->whereNull('deleted_at_admin')
                 ->orderBy('updated_at', 'desc')
                 ->limit(5)
                 ->get(),
@@ -34,7 +41,16 @@ class AdminController extends Controller
     // List Validasi Laporan
     public function index(Request $request)
     {
-        $query = LaporanBulanan::with('madrasah');
+        // Admin hanya melihat status 'submitted' dan 'verified', dan yang belum dihapus permanen oleh admin
+        $query = LaporanBulanan::with('madrasah')
+            ->whereIn('status_laporan', ['submitted', 'verified'])
+            ->whereNull('permanently_deleted_at_admin');
+        
+        if ($request->query('trashed') == '1') {
+            $query->whereNotNull('deleted_at_admin');
+        } else {
+            $query->whereNull('deleted_at_admin');
+        }
 
         if ($request->has('status')) {
             $query->where('status_laporan', $request->status);
@@ -58,12 +74,21 @@ class AdminController extends Controller
 
         $laporan = LaporanBulanan::findOrFail($id);
         
-        $laporan->update([
-            'status_laporan' => $request->status_laporan,
-            'catatan_revisi' => $request->catatan_revisi
-        ]);
+        $laporan->status_laporan = $request->status_laporan;
+        
+        if ($request->status_laporan === 'verified') {
+            $laporan->catatan_revisi = null;
+        } else {
+            $laporan->catatan_revisi = $request->catatan_revisi;
+        }
 
-        return response()->json(['message' => 'Status laporan diperbarui', 'data' => $laporan]);
+        $laporan->save();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Status laporan berhasil diperbarui menjadi ' . $request->status_laporan,
+            'data' => $laporan
+        ]);
     }
 
     // Rekapitulasi Data (For Excel Export)
@@ -73,11 +98,66 @@ class AdminController extends Controller
         $bulan = $request->input('bulan', date('Y-m-d')); // Month Needed
 
         // For preview: show all non-draft reports
-        $data = LaporanBulanan::with(['madrasah', 'siswa', 'guru'])
+        $query = LaporanBulanan::with(['madrasah', 'siswa', 'guru'])
             ->whereIn('status_laporan', ['submitted', 'verified', 'revisi'])
-            ->orderBy('updated_at', 'desc')
-            ->get();
+            ->orderBy('updated_at', 'desc');
+
+        if ($request->query('trashed') == '1') {
+            $query->whereNotNull('deleted_at_admin');
+        } else {
+            $query->whereNull('deleted_at_admin');
+        }
+
+        $data = $query->get();
 
         return response()->json($data);
+    }
+    public function destroy($id)
+    {
+        $laporan = LaporanBulanan::findOrFail($id);
+        
+        // Hanya bisa hapus jika status verified (sudah approve)
+        if ($laporan->status_laporan !== 'verified') {
+            return response()->json([
+                'message' => 'Hanya laporan yang sudah disetujui yang bisa dihapus. Silakan approve atau reject terlebih dahulu.'
+            ], 400);
+        }
+        
+        $laporan->update([
+            'deleted_at_admin' => now()
+        ]);
+
+        return response()->json(['message' => 'Laporan berhasil dipindahkan ke tempat sampah']);
+    }
+
+    public function restore($id)
+    {
+        $laporan = LaporanBulanan::findOrFail($id);
+        
+        $laporan->update([
+            'deleted_at_admin' => null
+        ]);
+
+        return response()->json(['message' => 'Laporan berhasil dikembalikan dari tempat sampah']);
+    }
+
+    public function permanentDelete($id)
+    {
+        $laporan = LaporanBulanan::findOrFail($id);
+        
+        if (!$laporan->deleted_at_admin) {
+            return response()->json(['message' => 'Laporan harus dipindahkan ke tempat sampah dulu.'], 400);
+        }
+        
+        // Tandai dihapus permanen oleh Admin
+        $laporan->update(['permanently_deleted_at_admin' => now()]);
+
+        // Jika status Verified: Hanya hapus dari DB jika Operator juga sudah hapus permanen
+        // Jika status Draft/Revisi: Bisa langsung hapus dari DB
+        if ($laporan->permanently_deleted_at_operator !== null || $laporan->status_laporan !== 'verified') {
+            $laporan->delete(); 
+        }
+
+        return response()->json(['message' => 'Laporan berhasil dihapus selamanya dari daftar Admin']);
     }
 }

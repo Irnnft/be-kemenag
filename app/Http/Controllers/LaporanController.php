@@ -20,7 +20,15 @@ class LaporanController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $query = LaporanBulanan::where('id_madrasah', $user->id_madrasah);
+        $query = LaporanBulanan::where('id_madrasah', $user->id_madrasah)
+            ->whereNull('permanently_deleted_at_operator'); // Sembunyikan jika sudah hapus permanen
+
+        // Filter untuk tempat sampah
+        if ($request->query('trashed') == '1') {
+            $query->whereNotNull('deleted_at_operator');
+        } else {
+            $query->whereNull('deleted_at_operator');
+        }
 
         if ($request->has('year')) {
             $query->whereYear('bulan_tahun', $request->year);
@@ -68,7 +76,7 @@ class LaporanController extends Controller
                 'Petugas Pustaka', 'Petugas UKS', 'Satpam', 'Petugas Kebersihan', 'Petugas Madrasah'
             ];
             foreach ($defaultRekap as $kat) {
-                $laporan->rekapPersonal()->create([
+                $laporan->rekap_personal()->create([
                     'keadaan' => $kat
                 ]);
             }
@@ -101,14 +109,14 @@ class LaporanController extends Controller
                 $laporan->keuangan()->create(['uraian_kegiatan' => $keu]);
             }
 
-            return response()->json($laporan->load(['siswa', 'rekapPersonal', 'guru', 'sarpras', 'mobiler', 'keuangan']), 201);
+            return response()->json($laporan->load(['siswa', 'rekap_personal', 'guru', 'sarpras', 'mobiler', 'keuangan']), 201);
         });
     }
 
     // Get Detail Laporan (Full Data)
     public function show($id)
     {
-        $laporan = LaporanBulanan::with(['siswa', 'rekapPersonal', 'guru', 'sarpras', 'mobiler', 'keuangan', 'madrasah'])
+        $laporan = LaporanBulanan::with(['siswa', 'rekap_personal', 'guru', 'sarpras', 'mobiler', 'keuangan', 'madrasah'])
             ->findOrFail($id);
 
         $this->authorizeAccess($laporan);
@@ -142,9 +150,9 @@ class LaporanController extends Controller
         
         $data = $request->input('data');
         DB::transaction(function () use ($laporan, $data) {
-            $laporan->rekapPersonal()->delete();
+            $laporan->rekap_personal()->delete();
             foreach ($data as $row) {
-                $laporan->rekapPersonal()->create($row);
+                $laporan->rekap_personal()->create($row);
             }
         });
 
@@ -230,9 +238,65 @@ class LaporanController extends Controller
             'submitted_at' => now()
         ]);
 
-        // Optional: Send Notification Logic Here
-
         return response()->json(['message' => 'Laporan berhasil disubmit. Menunggu verifikasi Kasi Penmad.']);
+    }
+
+    public function destroy($id)
+    {
+        $laporan = LaporanBulanan::findOrFail($id);
+        $this->authorizeAccess($laporan);
+
+        // Validasi: Status submitted tidak boleh dihapus
+        if ($laporan->status_laporan === 'submitted') {
+            return response()->json([
+                'message' => 'Laporan sedang dalam proses validasi admin, tidak bisa dihapus.'
+            ], 400);
+        }
+        
+        // Soft delete (operator view)
+        $laporan->update([
+            'deleted_at_operator' => now()
+        ]);
+        
+        return response()->json(['message' => 'Laporan dipindahkan ke tempat sampah']);
+    }
+
+    public function restore($id)
+    {
+        $laporan = LaporanBulanan::findOrFail($id);
+        $this->authorizeAccess($laporan);
+        
+        $laporan->update([
+            'deleted_at_operator' => null
+        ]);
+        
+        return response()->json(['message' => 'Laporan berhasil dikembalikan']);
+    }
+
+    public function permanentDelete($id)
+    {
+        $laporan = LaporanBulanan::findOrFail($id);
+        $this->authorizeAccess($laporan);
+
+        if (!$laporan->deleted_at_operator) {
+            return response()->json(['message' => 'Laporan harus di tempat sampah dulu'], 400);
+        }
+        
+        // Tandai sebagai dihapus permanen oleh Operator
+        $laporan->update(['permanently_deleted_at_operator' => now()]);
+
+        // Logic Baru: Kapan benar-benar hilang dari database?
+        // 1. Jika statusnya draft atau revisi (admin tidak berkepentingan)
+        // 2. Jika statusnya verified TAPI Admin juga sudah menghapus permanen
+        if (
+            $laporan->status_laporan === 'draft' || 
+            $laporan->status_laporan === 'revisi' || 
+            ($laporan->status_laporan === 'verified' && $laporan->permanently_deleted_at_admin !== null)
+        ) {
+            $laporan->delete(); // Hard Delete dari DB
+        }
+
+        return response()->json(['message' => 'Laporan berhasil dihapus selamanya dari daftar anda']);
     }
 
     // Helper: Verify Ownership & Status

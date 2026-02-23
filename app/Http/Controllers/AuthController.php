@@ -25,6 +25,16 @@ class AuthController extends Controller
             ]);
         }
 
+        // Cek Status Aktif Madrasah (Khusus Operator)
+        if ($user->role === 'operator' && $user->id_madrasah) {
+            $madrasah = \App\Models\Madrasah::find($user->id_madrasah);
+            if ($madrasah && $madrasah->status_aktif == 0) {
+                throw ValidationException::withMessages([
+                    'username' => ['Akun madrasah dinonaktifkan oleh Admin.'],
+                ]);
+            }
+        }
+
         $token = $user->createToken('auth-token')->plainTextToken;
 
         return response()->json([

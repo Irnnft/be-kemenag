@@ -13,7 +13,7 @@ class MasterDataController extends Controller
     // === MADRASAH ===
     public function indexMadrasah()
     {
-        return response()->json(Madrasah::all());
+        return response()->json(Madrasah::with('users')->get());
     }
 
     public function storeMadrasah(Request $request)
@@ -25,6 +25,11 @@ class MasterDataController extends Controller
         ]);
 
         return response()->json(Madrasah::create($validated));
+    }
+
+    public function showMadrasah($id)
+    {
+        return response()->json(Madrasah::with('users')->findOrFail($id));
     }
 
     public function updateMadrasah(Request $request, $id)
@@ -120,5 +125,12 @@ class MasterDataController extends Controller
         $validated['created_by'] = $request->user()->id;
 
         return response()->json(Pengumuman::create($validated));
+    }
+
+    public function destroyPengumuman($id)
+    {
+        $pengumuman = Pengumuman::findOrFail($id);
+        $pengumuman->delete();
+        return response()->json(['message' => 'Pengumuman deleted successfully']);
     }
 }

@@ -17,7 +17,11 @@ class LaporanBulanan extends Model
         'bulan_tahun',
         'status_laporan',
         'catatan_revisi',
-        'submitted_at'
+        'submitted_at',
+        'deleted_at_operator',
+        'deleted_at_admin',
+        'permanently_deleted_at_operator',
+        'permanently_deleted_at_admin'
     ];
 
     protected $casts = [
@@ -35,7 +39,7 @@ class LaporanBulanan extends Model
         return $this->hasMany(DataSiswa::class, 'id_laporan', 'id_laporan');
     }
 
-    public function rekapPersonal()
+    public function rekap_personal()
     {
         return $this->hasMany(DataRekapPersonal::class, 'id_laporan', 'id_laporan');
     }
