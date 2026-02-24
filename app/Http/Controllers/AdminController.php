@@ -31,8 +31,10 @@ class AdminController extends Controller
                 ->orderBy('updated_at', 'desc')
                 ->limit(5)
                 ->get(),
-            // Kecamatan progress akan ditampilkan setelah ada kolom kecamatan di tabel madrasah
-            'kecamatan_progress' => []
+            'kecamatan_progress' => \App\Models\Madrasah::select('kecamatan', DB::raw('count(*) as total'))
+                ->whereNotNull('kecamatan')
+                ->groupBy('kecamatan')
+                ->get()
         ];
 
         return response()->json($stats);
@@ -83,6 +85,10 @@ class AdminController extends Controller
         }
 
         $laporan->save();
+
+        $action = $request->status_laporan === 'verified' ? 'APPROVE_REPORT' : 'REVISE_REPORT';
+        $madrasahName = $laporan->madrasah->nama_madrasah;
+        \App\Models\ActivityLog::log($action, $madrasahName, 'Periode: ' . $laporan->bulan_tahun->format('M Y'));
 
         return response()->json([
             'status' => 'success',
@@ -159,5 +165,30 @@ class AdminController extends Controller
         }
 
         return response()->json(['message' => 'Laporan berhasil dihapus selamanya dari daftar Admin']);
+    }
+
+    public function getActivityLogs()
+    {
+        $logs = \App\Models\ActivityLog::orderBy('created_at', 'desc')
+            ->get();
+        return response()->json($logs);
+    }
+
+    public function destroyLog($id)
+    {
+        $log = \App\Models\ActivityLog::findOrFail($id);
+        $log->delete();
+        return response()->json(['message' => 'Log aktivitas berhasil dihapus permanen.']);
+    }
+
+    public function bulkDestroyLogs(Request $request)
+    {
+        $ids = $request->input('ids', []);
+        if (empty($ids)) {
+            return response()->json(['message' => 'Tidak ada log yang dipilih.'], 400);
+        }
+        
+        \App\Models\ActivityLog::whereIn('id', $ids)->delete();
+        return response()->json(['message' => count($ids) . ' Log aktivitas berhasil dihapus permanen.']);
     }
 }

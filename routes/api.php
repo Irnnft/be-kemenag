@@ -13,10 +13,14 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+    Route::put('/profile/update', [AuthController::class, 'updateProfile']);
+    Route::put('/profile/password', [AuthController::class, 'updatePassword']);
     Route::get('/pengumuman', [MasterDataController::class, 'indexPengumuman']);
 
+    // Public detail access for authorized users
     Route::get('/laporan/{id}', [LaporanController::class, 'show']); 
 
+    // === ROLE: OPERATOR SEKOLAH ===
     Route::middleware(CheckRole::class.':operator_sekolah')->group(function () {
         Route::get('/operator/dashboard', [LaporanController::class, 'index']);
         Route::post('/laporan', [LaporanController::class, 'store']); 
@@ -37,27 +41,42 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/operator/madrasah', [MasterDataController::class, 'updateMyMadrasah']);
     });
 
-    Route::middleware(CheckRole::class.':kasi_penmad')->group(function () {
+    // === ROLE: SHARED (KASI & STAFF) ===
+    Route::middleware(CheckRole::class.':kasi_penmad,staff_penmad')->group(function () {
         Route::get('/admin/dashboard', [AdminController::class, 'dashboard']); 
         Route::get('/admin/laporan', [AdminController::class, 'index']); 
-        Route::post('/admin/laporan/{id}/verify', [AdminController::class, 'verify']); 
         Route::get('/admin/recap', [AdminController::class, 'recap']);  
-        Route::delete('/admin/laporan/{id}', [AdminController::class, 'destroy']);
-        Route::post('/admin/laporan/{id}/restore', [AdminController::class, 'restore']);
-        Route::delete('/admin/laporan/{id}/permanent', [AdminController::class, 'permanentDelete']);
+        Route::get('/admin/logs', [AdminController::class, 'getActivityLogs']);
         
         Route::get('/master/madrasah', [MasterDataController::class, 'indexMadrasah']);
-        Route::post('/master/madrasah', [MasterDataController::class, 'storeMadrasah']);
         Route::get('/master/madrasah/{id}', [MasterDataController::class, 'showMadrasah']);
-        Route::put('/master/madrasah/{id}', [MasterDataController::class, 'updateMadrasah']);
-        Route::delete('/master/madrasah/{id}', [MasterDataController::class, 'destroyMadrasah']);
         
+        // User management shared but logic restricted in Controller
         Route::get('/master/users', [MasterDataController::class, 'indexUsers']);
         Route::post('/master/users', [MasterDataController::class, 'storeUser']);
         Route::put('/master/users/{id}', [MasterDataController::class, 'updateUser']);
         Route::delete('/master/users/{id}', [MasterDataController::class, 'destroyUser']);
-        
+    });
+
+    // === ROLE: STAFF PENMAD (Technical Verifier) ===
+    Route::middleware(CheckRole::class.':staff_penmad')->group(function () {
+        Route::post('/admin/laporan/{id}/verify', [AdminController::class, 'verify']); 
+        Route::delete('/admin/laporan/{id}', [AdminController::class, 'destroy']);
+        Route::post('/admin/laporan/{id}/restore', [AdminController::class, 'restore']);
+        Route::delete('/admin/laporan/{id}/permanent', [AdminController::class, 'permanentDelete']);
+
+        Route::post('/master/madrasah', [MasterDataController::class, 'storeMadrasah']);
+        Route::put('/master/madrasah/{id}', [MasterDataController::class, 'updateMadrasah']);
+        Route::delete('/master/madrasah/{id}', [MasterDataController::class, 'destroyMadrasah']);
+    });
+
+    // === ROLE: KASI PENMAD (Strategic Monitoring) ===
+    Route::middleware(CheckRole::class.':kasi_penmad')->group(function () {
         Route::post('/master/pengumuman', [MasterDataController::class, 'storePengumuman']);
         Route::delete('/master/pengumuman/{id}', [MasterDataController::class, 'destroyPengumuman']);
-      });
+        
+        // Audit Logs Management
+        Route::delete('/admin/logs/{id}', [AdminController::class, 'destroyLog']);
+        Route::post('/admin/logs/bulk-delete', [AdminController::class, 'bulkDestroyLogs']);
+    });
 });

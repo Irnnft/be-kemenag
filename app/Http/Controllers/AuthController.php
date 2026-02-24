@@ -26,7 +26,7 @@ class AuthController extends Controller
         }
 
         // Cek Status Aktif Madrasah (Khusus Operator)
-        if ($user->role === 'operator' && $user->id_madrasah) {
+        if ($user->role === 'operator_sekolah' && $user->id_madrasah) {
             $madrasah = \App\Models\Madrasah::find($user->id_madrasah);
             if ($madrasah && $madrasah->status_aktif == 0) {
                 throw ValidationException::withMessages([
@@ -37,6 +37,15 @@ class AuthController extends Controller
 
         $token = $user->createToken('auth-token')->plainTextToken;
 
+        \App\Models\ActivityLog::create([
+            'user_id' => $user->id,
+            'username' => $user->username,
+            'action' => 'LOGIN',
+            'details' => 'User logged into the system',
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
         return response()->json([
             'message' => 'Login berhasil',
             'token' => $token,
@@ -46,6 +55,7 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
+        \App\Models\ActivityLog::log('LOGOUT', 'User session ended');
         $request->user()->currentAccessToken()->delete();
         return response()->json(['message' => 'Logout berhasil']);
     }
@@ -53,5 +63,64 @@ class AuthController extends Controller
     public function me(Request $request)
     {
         return $request->user()->load('madrasah');
+    }
+
+    public function updateProfile(Request $request)
+    {
+        $user = $request->user();
+        
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'phone' => 'nullable|string|max:20',
+            'username' => [
+                'required',
+                'string',
+                'max:50',
+                \Illuminate\Validation\Rule::unique('users')->ignore($user->id),
+            ],
+        ], [
+            'username.unique' => 'Username ini sudah digunakan oleh orang lain.',
+        ]);
+
+        // Proteksi: Operator tidak boleh ganti username (NPSN)
+        $newUsername = $request->username;
+        if ($user->role === 'operator_sekolah' && $newUsername !== $user->username) {
+            return response()->json(['message' => 'NPSN Madrasah tidak dapat diubah.'], 403);
+        }
+
+        $user->update([
+            'name' => $request->name,
+            'phone' => $request->phone,
+            'username' => $newUsername,
+        ]);
+
+        \App\Models\ActivityLog::log('UPDATE_PROFILE', $user->username, 'Memperbarui data profil mandiri');
+
+        return response()->json([
+            'message' => 'Profil berhasil diperbarui',
+            'user' => $user
+        ]);
+    }
+
+    public function updatePassword(Request $request)
+    {
+        $user = $request->user();
+
+        $request->validate([
+            'current_password' => 'required',
+            'new_password' => 'required|min:6',
+        ]);
+
+        if (!Hash::check($request->current_password, $user->password)) {
+            return response()->json(['message' => 'Password saat ini salah'], 422);
+        }
+
+        $user->update([
+            'password' => Hash::make($request->new_password)
+        ]);
+
+        \App\Models\ActivityLog::log('CHANGE_PASSWORD', $user->username, 'Melakukan penggantian password akun');
+
+        return response()->json(['message' => 'Password berhasil diubah']);
     }
 }

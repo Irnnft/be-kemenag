@@ -30,6 +30,16 @@ class DummyDataSeeder extends Seeder
             ]
         );
 
+        // 1.5 Create Staf Penmad (Verifikator)
+        User::updateOrCreate(
+            ['username' => 'staff'],
+            [
+                'password' => Hash::make('password'),
+                'role' => 'staff_penmad',
+                'id_madrasah' => null,
+            ]
+        );
+
         // 2. Create Pengumuman
         Pengumuman::updateOrCreate(
             ['judul' => 'Jadwal Pelaporan Bulan Februari'],
@@ -52,6 +62,7 @@ class DummyDataSeeder extends Seeder
             [
                 'nama_madrasah' => $m['nama'],
                 'alamat' => $m['alamat'],
+                'kecamatan' => 'KAMPAR',
                 'status_aktif' => true
             ]
         );

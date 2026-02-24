@@ -238,6 +238,8 @@ class LaporanController extends Controller
             'submitted_at' => now()
         ]);
 
+        \App\Models\ActivityLog::log('SUBMIT_REPORT', $laporan->madrasah->nama_madrasah, 'Periode: ' . $laporan->bulan_tahun->format('M Y'));
+
         return response()->json(['message' => 'Laporan berhasil disubmit. Menunggu verifikasi Kasi Penmad.']);
     }
 
@@ -303,7 +305,7 @@ class LaporanController extends Controller
     private function authorizeAccess($laporan)
     {
         $user = Auth::user();
-        if ($user->role === 'kasi_penmad') return true;
+        if ($user->role === 'kasi_penmad' || $user->role === 'staff_penmad') return true;
         if ($user->id_madrasah !== $laporan->id_madrasah) {
             abort(403, 'Unauthorized');
         }
