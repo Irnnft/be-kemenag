@@ -41,7 +41,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/operator/madrasah', [MasterDataController::class, 'updateMyMadrasah']);
     });
 
-    // === ROLE: SHARED (KASI & STAFF) ===
+    
     Route::middleware(CheckRole::class.':kasi_penmad,staff_penmad')->group(function () {
         Route::get('/admin/dashboard', [AdminController::class, 'dashboard']); 
         Route::get('/admin/laporan', [AdminController::class, 'index']); 

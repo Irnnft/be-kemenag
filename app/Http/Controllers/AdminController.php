@@ -133,6 +133,8 @@ class AdminController extends Controller
             'deleted_at_admin' => now()
         ]);
 
+        \App\Models\ActivityLog::log('DELETE_LAPORAN', $laporan->madrasah->nama_madrasah ?? '-', 'Laporan dipindahkan ke tempat sampah. Periode: ' . optional($laporan->bulan_tahun)->format('M Y'));
+
         return response()->json(['message' => 'Laporan berhasil dipindahkan ke tempat sampah']);
     }
 
@@ -144,6 +146,8 @@ class AdminController extends Controller
             'deleted_at_admin' => null
         ]);
 
+        \App\Models\ActivityLog::log('RESTORE_LAPORAN', $laporan->madrasah->nama_madrasah ?? '-', 'Laporan dikembalikan dari tempat sampah. Periode: ' . optional($laporan->bulan_tahun)->format('M Y'));
+
         return response()->json(['message' => 'Laporan berhasil dikembalikan dari tempat sampah']);
     }
 
@@ -154,6 +158,9 @@ class AdminController extends Controller
         if (!$laporan->deleted_at_admin) {
             return response()->json(['message' => 'Laporan harus dipindahkan ke tempat sampah dulu.'], 400);
         }
+
+        $madrasahName = $laporan->madrasah->nama_madrasah ?? '-';
+        $periode = optional($laporan->bulan_tahun)->format('M Y');
         
         // Tandai dihapus permanen oleh Admin
         $laporan->update(['permanently_deleted_at_admin' => now()]);
@@ -164,13 +171,31 @@ class AdminController extends Controller
             $laporan->delete(); 
         }
 
+        \App\Models\ActivityLog::log('PERMANENT_DELETE_LAPORAN', $madrasahName, 'Laporan dihapus permanen. Periode: ' . $periode);
+
         return response()->json(['message' => 'Laporan berhasil dihapus selamanya dari daftar Admin']);
     }
 
     public function getActivityLogs()
     {
-        $logs = \App\Models\ActivityLog::orderBy('created_at', 'desc')
-            ->get();
+        $logs = \App\Models\ActivityLog::with('user')
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($log) {
+                return [
+                    'id'         => $log->id,
+                    'user_id'    => $log->user_id,
+                    'username'   => $log->username,
+                    'role'       => $log->user?->role ?? null,
+                    'action'     => $log->action,
+                    'subject'    => $log->subject,
+                    'details'    => $log->details,
+                    'ip_address' => $log->ip_address,
+                    'created_at' => $log->created_at,
+                    'updated_at' => $log->updated_at,
+                ];
+            });
+
         return response()->json($logs);
     }
 
