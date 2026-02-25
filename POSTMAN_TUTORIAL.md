@@ -144,7 +144,7 @@ Melihat daftar pengumuman untuk semua user.
 - **URL:** `{{base_url}}/pengumuman`
 
 **Respon Sukses (200):**
-```json.
+```json
 [
     {
         "id": 1,
