@@ -8,6 +8,12 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\MasterDataController;
 use App\Http\Middleware\CheckRole;
 
+// Tambahan Manual CORS untuk InfinityFree Bypass
+header('Access-Control-Allow-Origin: https://mis-kampar.vercel.app');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Origin, Content-Type, Accept, Authorization, X-Request-With, X-XSRF-TOKEN');
+header('Access-Control-Allow-Credentials: true');
+
 Route::post('/login', [AuthController::class, 'login']);
 
 Route::middleware('auth:sanctum')->group(function () {
