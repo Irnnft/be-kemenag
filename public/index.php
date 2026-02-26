@@ -8,8 +8,13 @@ use Illuminate\Http\Request;
  * Wajib diletakkan di paling atas sebelum bootstrap Laravel
  */
 
-// 1. Izinkan Origin Vercel
-header('Access-Control-Allow-Origin: https://mis-kampar.vercel.app');
+/* // 1. Izinkan Origin (Local & Vercel)
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '*';
+if (in_array($origin, ['http://localhost:3000', 'http://127.0.0.1:3000', 'https://mis-kampar.vercel.app'])) {
+    header("Access-Control-Allow-Origin: $origin");
+} else {
+    header("Access-Control-Allow-Origin: *");
+}
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Origin, Content-Type, Accept, Authorization, X-Request-With, X-XSRF-TOKEN');
 header('Access-Control-Allow-Credentials: true');
@@ -18,7 +23,7 @@ header('Access-Control-Allow-Credentials: true');
 if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
     header("HTTP/1.1 200 OK");
     exit;
-}
+} */
 
 // 3. Folder Helper untuk Cookie Security
 if (strpos($_SERVER['REQUEST_URI'], 'api/login') !== false && $_SERVER['REQUEST_METHOD'] == 'GET') {
