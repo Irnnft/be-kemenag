@@ -35,6 +35,9 @@ class AuthController extends Controller
             }
         }
 
+        // Hapus SEMUA token lama user ini supaya tabel tetap bersih
+        $user->tokens()->delete();
+
         $token = $user->createToken('auth-token')->plainTextToken;
 
         \App\Models\ActivityLog::create([
@@ -55,8 +58,14 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        \App\Models\ActivityLog::log('LOGOUT', 'User session ended');
-        $request->user()->currentAccessToken()->delete();
+        $user = $request->user();
+        
+        if ($user) {
+            \App\Models\ActivityLog::log('LOGOUT', 'User session ended');
+            // Hapus SEMUA token user ini (supaya tabel benar-benar bersih)
+            $user->tokens()->delete();
+        }
+        
         return response()->json(['message' => 'Logout berhasil']);
     }
 

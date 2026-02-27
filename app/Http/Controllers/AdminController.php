@@ -43,9 +43,9 @@ class AdminController extends Controller
     // List Validasi Laporan
     public function index(Request $request)
     {
-        // Admin hanya melihat status 'submitted' dan 'verified', dan yang belum dihapus permanen oleh admin
+        // Admin hanya melihat status 'submitted', 'verified', dan 'revisi'
         $query = LaporanBulanan::with('madrasah')
-            ->whereIn('status_laporan', ['submitted', 'verified'])
+            ->whereIn('status_laporan', ['submitted', 'verified', 'revisi'])
             ->whereNull('permanently_deleted_at_admin');
         
         if ($request->query('trashed') == '1') {
@@ -100,13 +100,32 @@ class AdminController extends Controller
     // Rekapitulasi Data (For Excel Export)
     public function recap(Request $request)
     {
-        // Get all submitted/verified reports for preview
-        $bulan = $request->input('bulan', date('Y-m-d')); // Month Needed
+        $bulanStr = $request->query('bulan'); 
+        $kecamatan = $request->query('kecamatan');
+        $jenjang = $request->query('jenjang');
 
-        // For preview: show all non-draft reports
-        $query = LaporanBulanan::with(['madrasah', 'siswa', 'guru'])
-            ->whereIn('status_laporan', ['submitted', 'verified', 'revisi'])
-            ->orderBy('updated_at', 'desc');
+        // Untuk Rekapitulasi: Ambil semua status agar Admin bisa lihat progress (kecuali draft jika rekapan nilai)
+        // Tapi kita bebaskan dulu agar filter terlihat jalan
+        $query = LaporanBulanan::with(['madrasah', 'siswa', 'rekap_personal', 'guru', 'sarpras', 'mobiler', 'keuangan']);
+
+        // Filter: Periode (Bulan - Tahun)
+        if ($bulanStr && $bulanStr !== 'undefined') {
+            $query->where('bulan_tahun', 'LIKE', $bulanStr . '%');
+        }
+
+        // Filter: Kecamatan (Case Insensitive)
+        if ($kecamatan && $kecamatan !== 'Semua Kec.') {
+            $query->whereHas('madrasah', function($q) use ($kecamatan) {
+                $q->where('kecamatan', 'LIKE', trim($kecamatan));
+            });
+        }
+
+        // Filter: Jenjang (MI/MTS/MA) - Cek awalan nama madrasah
+        if ($jenjang && $jenjang !== 'Semua Jenjang') {
+            $query->whereHas('madrasah', function($q) use ($jenjang) {
+                $q->where('nama_madrasah', 'REGEXP', '^(' . $jenjang . ')[[:space:]|[:punct:]]');
+            });
+        }
 
         if ($request->query('trashed') == '1') {
             $query->whereNotNull('deleted_at_admin');
@@ -114,7 +133,7 @@ class AdminController extends Controller
             $query->whereNull('deleted_at_admin');
         }
 
-        $data = $query->get();
+        $data = $query->orderBy('updated_at', 'desc')->get();
 
         return response()->json($data);
     }
