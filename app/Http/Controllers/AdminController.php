@@ -13,19 +13,29 @@ class AdminController extends Controller
     // Monitoring Dashboard
     public function dashboard(Request $request) 
     {
+        $user = $request->user();
+        $statusMasuk = ['submitted', 'verified', 'revisi'];
+        
+        if ($user && $user->role === 'staff_penmad') {
+            $statusMasuk = ['submitted', 'verified'];
+        }
+
         // Summary Stats (Exclude deleted records)
         $stats = [
             'total_madrasah' => \App\Models\Madrasah::count(),
-            'laporan_masuk' => LaporanBulanan::whereIn('status_laporan', ['submitted', 'verified', 'revisi'])
+            'laporan_masuk' => LaporanBulanan::whereIn('status_laporan', $statusMasuk)
                 ->whereNull('deleted_at_admin')
                 ->count(),
             'terverifikasi' => LaporanBulanan::where('status_laporan', 'verified')
                 ->whereNull('deleted_at_admin')
                 ->count(),
-            'perlu_revisi' => LaporanBulanan::where('status_laporan', 'revisi')
+            'perlu_revisi' => ($user && $user->role === 'staff_penmad') ? 0 : LaporanBulanan::where('status_laporan', 'revisi')
                 ->whereNull('deleted_at_admin')
                 ->count(),
             'recent_submissions' => LaporanBulanan::with('madrasah')
+                ->when($user && $user->role === 'staff_penmad', function($query) {
+                    $query->where('status_laporan', '!=', 'revisi');
+                })
                 ->where('status_laporan', '!=', 'draft')
                 ->whereNull('deleted_at_admin')
                 ->orderBy('updated_at', 'desc')
@@ -43,9 +53,16 @@ class AdminController extends Controller
     // List Validasi Laporan
     public function index(Request $request)
     {
-        // Admin hanya melihat status 'submitted', 'verified', dan 'revisi'
+        $user = $request->user();
+        $statusTerlihat = ['submitted', 'verified', 'revisi'];
+        
+        if ($user && $user->role === 'staff_penmad') {
+            $statusTerlihat = ['submitted', 'verified'];
+        }
+
+        // Admin hanya melihat status 'submitted', 'verified', dan 'revisi' (tergantung role)
         $query = LaporanBulanan::with('madrasah')
-            ->whereIn('status_laporan', ['submitted', 'verified', 'revisi'])
+            ->whereIn('status_laporan', $statusTerlihat)
             ->whereNull('permanently_deleted_at_admin');
         
         if ($request->query('trashed') == '1') {
@@ -107,6 +124,11 @@ class AdminController extends Controller
         // Untuk Rekapitulasi: Ambil semua status agar Admin bisa lihat progress (kecuali draft jika rekapan nilai)
         // Tapi kita bebaskan dulu agar filter terlihat jalan
         $query = LaporanBulanan::with(['madrasah', 'siswa', 'rekap_personal', 'guru', 'sarpras', 'mobiler', 'keuangan']);
+
+        $user = $request->user();
+        if ($user && $user->role === 'staff_penmad') {
+            $query->where('status_laporan', '!=', 'revisi');
+        }
 
         // Filter: Periode (Bulan - Tahun)
         if ($bulanStr && $bulanStr !== 'undefined') {
